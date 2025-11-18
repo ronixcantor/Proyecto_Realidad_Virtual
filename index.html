@@ -1,465 +1,119 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Juego Pájaros VR - Luna Nocturna (Cardboard/VR Box)</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js VR - Disparo</title>
     <style>
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            background: #000; 
-            font-family: Arial, sans-serif; 
-        }
-        #score { 
-            position: absolute; 
-            top: 10px; 
-            left: 10px; 
-            color: #fff; 
-            font-size: 24px; 
-            z-index: 100; 
-            background: rgba(0,0,0,0.7); 
-            padding: 15px; 
-            border-radius: 10px; 
-            box-shadow: 0 0 20px rgba(255,255,255,0.3);
-            font-weight: bold;
-        }
-        #crosshair { 
-            position: absolute; 
-            top: 50%; 
-            left: 50%; 
-            transform: translate(-50%, -50%); 
-            color: #ff0000; 
-            font-size: 40px; 
-            z-index: 100; 
-            pointer-events: none; 
-            display: none;
-            text-shadow: 0 0 10px #ff0000;
-        }
-        #info { 
-            position: absolute; 
-            bottom: 10px; 
-            left: 10px; 
-            color: #fff; 
-            z-index: 100; 
-            background: rgba(0,0,0,0.7); 
-            padding: 10px; 
-            border-radius: 8px; 
-            font-size: 14px;
-        }
-        #vrButton { 
-            position: fixed; 
-            bottom: 20px; 
-            right: 20px; 
-            width: 70px; 
-            height: 70px; 
-            background: rgba(0,0,0,0.8); 
-            border-radius: 50%; 
-            z-index: 9999; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            cursor: pointer; 
-            box-shadow: 0 0 30px rgba(0,255,255,0.8);
-            transition: transform 0.2s;
-        }
-        #vrButton:hover {
-            transform: scale(1.1);
-        }
+        body { margin: 0; overflow: hidden; }
         canvas { display: block; }
     </style>
 </head>
 <body>
-    <div id="score">🌕 Puntos: <span id="scoreValue">0</span></div>
-    <div id="crosshair">⊕</div>
-    <div id="info">Mueve la cabeza para apuntar • Toca/Click para disparar 🐦💥</div>
 
-    <!-- Botón VR/Cardboard -->
-    <div id="vrButton" title="Entrar en Modo VR/Cardboard">
-        <svg width="45" height="45" viewBox="0 0 24 24" fill="#00ffff">
-            <path d="M5,3H19A2,2 0 0,1 21,5V19A2,2 0 0,1 19,21H5A2,2 0 0,1 3,19V5A2,2 0 0,1 5,3M5,5V19H19V5H5Z"/>
-            <path d="M7,9H17V15H7V9Z"/>
-            <circle cx="9.5" cy="12" r="1.5"/>
-            <circle cx="14.5" cy="12" r="1.5"/>
-        </svg>
-    </div>
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import { VRButton } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/VRButton.js";
 
-    <!-- Scripts Three.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://threejs.org/examples/js/controls/DeviceOrientationControls.js"></script>
-    <script src="https://threejs.org/examples/js/effects/StereoEffect.js"></script>
-    <script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+let scene, camera, renderer;
 
-    <script>
-        // Variables globales
-        let scene, camera, renderer, effect, controls;
-        let birds = [];
-        let particles = [];
-        let raycaster = new THREE.Raycaster();
-        let score = 0;
-        let scoreElement = document.getElementById('scoreValue');
-        let isVRMode = false;
+// ----------------------------
+// Inicializar escena
+// ----------------------------
+scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202020);
 
-        // Inicializar escena
-        function init() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x000022); // Cielo nocturno profundo
+camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 1.6, 3);
 
-            camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 0, 0);
+renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            document.body.appendChild(renderer.domElement);
+// Botón para entrar a VR
+document.body.appendChild(VRButton.createButton(renderer));
 
-            effect = new THREE.StereoEffect(renderer);
-            effect.setSize(window.innerWidth, window.innerHeight);
+// Luz
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(1, 3, 2);
+scene.add(light);
 
-            // Controles VR (DeviceOrientation)
-            controls = new THREE.DeviceOrientationControls(camera);
+// Piso
+const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(20, 20),
+    new THREE.MeshStandardMaterial({ color: 0x303030 })
+);
+floor.rotation.x = -Math.PI / 2;
+scene.add(floor);
 
-            // Fallback para desktop: OrbitControls + crosshair visible
-            const isMobile = /Android|iPhone/i.test(navigator.userAgent);
-            if (!isMobile) {
-                const orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
-                orbitControls.enableZoom = false;
-                orbitControls.enablePan = false;
-                document.getElementById('crosshair').style.display = 'block';
-            }
+// Objeto objetivo
+const target = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5, 0.5, 0.5),
+    new THREE.MeshStandardMaterial({ color: 0xff4444 })
+);
+target.position.set(0, 1.5, -4);
+scene.add(target);
 
-            // Iluminación lunar
-            setupMoonLighting();
+// ------------------------------------------
+// FUNCION DE DISPARO
+// ------------------------------------------
+function shootProjectile() {
+    const geometry = new THREE.SphereGeometry(0.05, 16, 16);
+    const material = new THREE.MeshStandardMaterial({ color: 0x00aaff });
+    const projectile = new THREE.Mesh(geometry, material);
 
-            // Cielo estrellado y luna
-            createStarField();
-            createMoon();
+    projectile.position.copy(camera.position);
 
-            // Crear pájaros
-            loadBirdTexture();
+    // Dirección del disparo
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
 
-            // Eventos
-            window.addEventListener('resize', onWindowResize);
-            renderer.domElement.addEventListener('click', onClick);
-            renderer.domElement.addEventListener('touchstart', onClick);
+    projectile.userData.velocity = direction.multiplyScalar(0.15);
 
-            // Botón VR/Cardboard
-            document.getElementById('vrButton').addEventListener('click', enterVR);
+    scene.add(projectile);
 
-            // Conectar controles VR
-            controls.connect();
-            animate();
+    projectiles.push(projectile);
+}
+
+const projectiles = [];
+
+// Click o toque → disparar
+window.addEventListener("click", shootProjectile);
+window.addEventListener("touchstart", shootProjectile);
+
+// ------------------------------------------
+// ANIMACIÓN
+// ------------------------------------------
+function animate() {
+    renderer.setAnimationLoop(render);
+}
+
+function render() {
+    // Mover proyectiles
+    projectiles.forEach((p, i) => {
+        p.position.add(p.userData.velocity);
+
+        // Si ya está lejos, eliminarlo
+        if (p.position.length() > 50) {
+            scene.remove(p);
+            projectiles.splice(i, 1);
         }
+    });
 
-        // Entrar en modo VR fullscreen
-        function enterVR() {
-            const canvas = renderer.domElement;
-            if (canvas.requestFullscreen) {
-                canvas.requestFullscreen();
-            } else if (canvas.mozRequestFullScreen) {
-                canvas.mozRequestFullScreen();
-            } else if (canvas.webkitRequestFullscreen) {
-                canvas.webkitRequestFullscreen();
-            } else if (canvas.msRequestFullscreen) {
-                canvas.msRequestFullscreen();
-            }
-            // Bloquear orientación paisaje
-            if (screen.orientation && screen.orientation.lock) {
-                screen.orientation.lock('landscape-primary');
-            }
-            isVRMode = true;
-            document.getElementById('info').innerHTML = '¡VR Activado! Mueve cabeza • Toca para disparar';
-        }
+    renderer.render(scene, camera);
+}
 
-        // Iluminación lunar profesional
-        function setupMoonLighting() {
-            // Luz principal: Luna
-            const moonLight = new THREE.DirectionalLight(0xaaaaee, 1.8);
-            moonLight.position.set(50, 100, 50);
-            moonLight.castShadow = true;
-            moonLight.shadow.mapSize.width = 2048;
-            moonLight.shadow.mapSize.height = 2048;
-            moonLight.shadow.camera.near = 0.5;
-            moonLight.shadow.camera.far = 500;
-            moonLight.shadow.camera.left = -50;
-            moonLight.shadow.camera.right = 50;
-            moonLight.shadow.camera.top = 50;
-            moonLight.shadow.camera.bottom = -50;
-            scene.add(moonLight);
+animate();
 
-            // Luz ambiente (reflejo lunar)
-            const ambientLight = new THREE.AmbientLight(0x223366, 0.4);
-            scene.add(ambientLight);
+// Ajustar a pantalla
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
 
-            // Luz secundaria estrellas
-            const starLight = new THREE.DirectionalLight(0x4444aa, 0.3);
-            starLight.position.set(-20, 30, -20);
-            scene.add(starLight);
-        }
-
-        // Crear luna visible
-        function createMoon() {
-            const moonCanvas = document.createElement('canvas');
-            moonCanvas.width = 256;
-            moonCanvas.height = 256;
-            const ctx = moonCanvas.getContext('2d');
-            
-            // Gradiente lunar
-            const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-            gradient.addColorStop(0, '#ffffcc');
-            gradient.addColorStop(0.4, '#dddd99');
-            gradient.addColorStop(1, '#666633');
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.arc(128, 128, 128, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Cráteres realistas
-            ctx.fillStyle = '#555522';
-            for (let i = 0; i < 20; i++) {
-                const x = 128 + (Math.random() - 0.5) * 120;
-                const y = 128 + (Math.random() - 0.5) * 120;
-                const r = 6 + Math.random() * 12;
-                ctx.beginPath();
-                ctx.arc(x, y, r, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            const moonTexture = new THREE.CanvasTexture(moonCanvas);
-            const moonMaterial = new THREE.SpriteMaterial({ 
-                map: moonTexture, 
-                transparent: true, 
-                opacity: 0.95 
-            });
-            const moon = new THREE.Sprite(moonMaterial);
-            moon.scale.set(12, 12, 1);
-            moon.position.set(0, 30, -60);
-            scene.add(moon);
-        }
-
-        // Textura pájaro detallada
-        function loadBirdTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 128;
-            canvas.height = 128;
-            const ctx = canvas.getContext('2d');
-            
-            // Cabeza
-            ctx.fillStyle = '#ffdd88';
-            ctx.beginPath();
-            ctx.ellipse(64, 55, 25, 18, 0, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Cuerpo
-            ctx.fillStyle = '#ff8800';
-            ctx.fillRect(35, 45, 55, 20);
-            
-            // Ala
-            ctx.fillStyle = '#dd4400';
-            ctx.beginPath();
-            ctx.moveTo(85, 48);
-            ctx.lineTo(115, 45);
-            ctx.lineTo(100, 55);
-            ctx.fill();
-            
-            // Pico
-            ctx.fillStyle = '#ffaa00';
-            ctx.beginPath();
-            ctx.moveTo(85, 52);
-            ctx.lineTo(95, 50);
-            ctx.lineTo(90, 58);
-            ctx.fill();
-            
-            // Ojo
-            ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.arc(52, 52, 6, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#000';
-            ctx.beginPath();
-            ctx.arc(53, 51, 2.5, 0, Math.PI * 2);
-            ctx.fill();
-
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.minFilter = THREE.LinearFilter;
-            createBirds(texture);
-        }
-
-        // Crear pool de pájaros
-        function createBirds(texture) {
-            const material = new THREE.SpriteMaterial({ 
-                map: texture, 
-                transparent: true, 
-                opacity: 0.95,
-                alphaTest: 0.1
-            });
-            for (let i = 0; i < 12; i++) { // Más pájaros
-                const sprite = new THREE.Sprite(material);
-                sprite.scale.set(0.7, 0.7, 0.7);
-                sprite.castShadow = true;
-                sprite.receiveShadow = true;
-                resetBird(sprite);
-                scene.add(sprite);
-                birds.push(sprite);
-            }
-        }
-
-        // Reset posición pájaro
-        function resetBird(bird) {
-            const radius = 15 + Math.random() * 10;
-            const phi = Math.random() * Math.PI * 2;
-            const theta = Math.random() * Math.PI * 0.7 + 0.2;
-            bird.position.x = radius * Math.sin(theta) * Math.cos(phi);
-            bird.position.y = radius * Math.sin(theta) * Math.sin(phi);
-            bird.position.z = radius * Math.cos(theta) - 5;
-            bird.userData.velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * 0.18,
-                (Math.random() - 0.5) * 0.18,
-                (Math.random() - 0.5) * 0.1
-            );
-            bird.userData.life = 1.0;
-            bird.visible = true;
-        }
-
-        // Campo de estrellas
-        function createStarField() {
-            const starsGeometry = new THREE.BufferGeometry();
-            const starsMaterial = new THREE.PointsMaterial({ color: 0x8888ff, size: 0.1 });
-            const starsVertices = [];
-            for (let i = 0; i < 20000; i++) {
-                starsVertices.push(
-                    (Math.random() - 0.5) * 2000,
-                    (Math.random() - 0.5) * 2000,
-                    (Math.random() - 0.5) * 2000
-                );
-            }
-            starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
-            const stars = new THREE.Points(starsGeometry, starsMaterial);
-            scene.add(stars);
-        }
-
-        // Disparo desde centro de mirilla
-        function onClick() {
-            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera); // Centro pantalla
-            const intersects = raycaster.intersectObjects(birds);
-            if (intersects.length > 0) {
-                const bird = intersects[0].object;
-                if (bird.visible) {
-                    explodeBird(bird);
-                    score += 100;
-                    scoreElement.textContent = score;
-                }
-            }
-        }
-
-        // Explosión con partículas
-        function explodeBird(bird) {
-            bird.visible = false;
-            const particleCount = 80;
-            const geometry = new THREE.BufferGeometry();
-            const positions = new Float32Array(particleCount * 3);
-            const velocities = [];
-            const colors = new Float32Array(particleCount * 3);
-
-            for (let i = 0; i < particleCount; i++) {
-                positions[i * 3] = bird.position.x;
-                positions[i * 3 + 1] = bird.position.y;
-                positions[i * 3 + 2] = bird.position.z;
-                velocities.push(new THREE.Vector3(
-                    (Math.random() - 0.5) * 4,
-                    Math.random() * 2.5,
-                    (Math.random() - 0.5) * 4
-                ));
-                // Colores fuego
-                const color = new THREE.Color();
-                color.setHSL(0.1 + Math.random() * 0.1, 1, 0.5 + Math.random() * 0.5);
-                colors[i * 3] = color.r;
-                colors[i * 3 + 1] = color.g;
-                colors[i * 3 + 2] = color.b;
-            }
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-            const material = new THREE.PointsMaterial({ 
-                size: 0.2, 
-                vertexColors: true,
-                transparent: true 
-            });
-            const explosion = new THREE.Points(geometry, material);
-            scene.add(explosion);
-            particles.push({ mesh: explosion, velocities, life: 1.2 });
-
-            // Respawn después de explosión
-            setTimeout(() => {
-                resetBird(bird);
-            }, 300);
-        }
-
-        // Update loop
-        function update() {
-            controls.update();
-
-            // Mover pájaros (vuelo realista)
-            birds.forEach(bird => {
-                if (bird.visible) {
-                    bird.position.add(bird.userData.velocity);
-                    bird.rotation.y += 0.1;
-                    bird.rotation.z = Math.sin(Date.now() * 0.01 + bird.position.x) * 0.2; // Aleteo
-                    bird.lookAt(camera.position); // Orientados al jugador
-                    if (bird.position.length() > 30) {
-                        resetBird(bird);
-                    }
-                }
-            });
-
-            // Update partículas explosión
-            particles = particles.filter(p => {
-                p.life -= 0.03;
-                const positions = p.mesh.geometry.attributes.position.array;
-                for (let i = 0; i < positions.length / 3; i++) {
-                    positions[i * 3] += p.velocities[i].x * 0.97;
-                    positions[i * 3 + 1] += p.velocities[i].y * 0.94;
-                    positions[i * 3 + 2] += p.velocities[i].z * 0.97;
-                    p.velocities[i].multiplyScalar(0.98); // Fricción
-                }
-                p.mesh.geometry.attributes.position.needsUpdate = true;
-                p.mesh.material.opacity = p.life;
-                p.mesh.material.size = 0.2 * p.life;
-                if (p.life <= 0) {
-                    scene.remove(p.mesh);
-                    p.mesh.geometry.dispose();
-                    p.mesh.material.dispose();
-                    return false;
-                }
-                return true;
-            });
-        }
-
-        // Loop de animación
-        function animate() {
-            requestAnimationFrame(animate);
-            update();
-            if (isVRMode || window.innerWidth < 800) { // VR o móvil
-                effect.render(scene, camera);
-            } else {
-                renderer.render(scene, camera);
-            }
-        }
-
-        // Resize ventana
-        function onWindowResize() {
-            const width = window.innerWidth;
-            const height = window.innerHeight;
-            renderer.setSize(width, height);
-            effect.setSize(width, height);
-            camera.aspect = width / height;
-            camera.updateProjectionMatrix();
-        }
-
-        // ¡INICIAR JUEGO!
-        init();
-    </script>
 </body>
 </html>
+
